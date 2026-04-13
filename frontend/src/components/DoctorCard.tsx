@@ -108,7 +108,7 @@ export function DoctorCard({ match, isFirst }: Props) {
           <span className="doc-stat__value">{doctor.hospital}</span>
         </div>
         <div className="doc-stat">
-          <span className="doc-stat__label">Fee</span>
+          <span className="doc-stat__label">Fees</span>
           <span className="doc-stat__value">
             {doctor.consultationFee === 0 ? "Emergency — no fee" : `₹${doctor.consultationFee}`}
           </span>
