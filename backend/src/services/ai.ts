@@ -10,8 +10,9 @@ const model = genAI.getGenerativeModel({
   model: "gemini-3-flash-preview" 
 });
 
-// backend/src/services/ai.ts
-
+/**
+ * Manages API throughput to prevent hitting rate limits
+ */
 class ConcurrencyLimiter {
   private running = 0;
   private queue: Array<() => void> = [];
@@ -44,7 +45,6 @@ class ConcurrencyLimiter {
     }
   }
 
-  // ADD THIS METHOD BACK
   stats() {
     return { running: this.running, queued: this.queue.length };
   }
@@ -52,29 +52,31 @@ class ConcurrencyLimiter {
 
 export const aiLimiter = new ConcurrencyLimiter(config.MAX_CONCURRENT_AI_REQUESTS);
 
+/**
+ * Builds the system instruction tailored for high-risk conditions and formal greetings.
+ */
 function buildSystemPrompt(
   primaryDoctor: Doctor,
   language: string,
   insurance: string,
   urgency: Urgency
 ): string {
-  return `You are a hospital Navigator Agent — a compassionate, expert medical routing assistant.
+  return `You are a Senior Hospital Navigator — a clinical routing expert with deep empathy.
 
-CONTEXT:
-- Primary recommended specialist: ${primaryDoctor.name} (${primaryDoctor.specialty})
-- Patient language preference: ${language}
-- Patient insurance: ${insurance}
-- Detected urgency: ${urgency}
+CURRENT CONTEXT:
+- Recommended Specialist: ${primaryDoctor.name} (${primaryDoctor.specialty})
+- Language: ${language}
+- Insurance: ${insurance}
+- Urgency Level: ${urgency}
 
-YOUR ROLE:
-1. Acknowledge symptoms with empathy.
-2. Explain recommendation for ${primaryDoctor.specialty}.
-3. Mention the doctor by name.
-4. Handle urgency (critical/high).
-5. If the user input is very short (one word), ask a brief follow-up question.
-6. Close with one practical next step.
+DIALOGUE PROTOCOLS:
+1. GREETING: If the user simply says "Hi", "Hello", or similar, respond with: "Hello! Welcome to the Medical Navigator. I am here to help you find the right specialist for your needs. Could you please describe the symptoms or health concerns you are currently experiencing?"
+2. COMPLEX CONDITIONS (Cancer/Lung Issues): If the user mentions symptoms like tumors, chronic cough, or breathing difficulty, prioritize professional empathy. Explain that ${primaryDoctor.specialty} is the specific field equipped to investigate these concerns.
+3. URGENCY HANDLING: For ${urgency} status "critical" or "high", be direct about the need for prompt evaluation. 
+4. DOCTOR HIGHLIGHT: Mention ${primaryDoctor.name} specifically and highlight why they match (e.g., expertise in ${primaryDoctor.keywords.slice(0, 2).join(", ")}).
+5. FOLLOW-UP: If the input is brief, ask one targeted question (e.g., "How long have you had this cough?") to better assess the case.
 
-TONE: Warm, clear, concise. Max 4-6 sentences.`;
+TONE: Clinical, authoritative, warm, and concise. Max 5 sentences. Use ${language}.`;
 }
 
 export interface AIResponse {
@@ -84,6 +86,9 @@ export interface AIResponse {
   durationMs: number;
 }
 
+/**
+ * Fetches a clinical navigation response from the Gemini model.
+ */
 export async function getNavigatorResponse(
   userMessage: string,
   history: Message[],
@@ -95,13 +100,12 @@ export async function getNavigatorResponse(
   return aiLimiter.run(async () => {
     const start = Date.now();
 
-    // Map history to Gemini format (user/model)
+    // Map chat history to Gemini's format
     const contents: Content[] = history.map((m) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
     }));
 
-    // FIX: Passing systemInstruction as a structured Content object
     const chat = model.startChat({
       history: contents,
       systemInstruction: {
@@ -110,15 +114,19 @@ export async function getNavigatorResponse(
       },
     });
 
-    const result = await chat.sendMessage(userMessage);
-    const response = await result.response;
+    try {
+      const result = await chat.sendMessage(userMessage);
+      const response = await result.response;
 
-    return {
-      text: response.text(),
-      inputTokens: response.usageMetadata?.promptTokenCount ?? 0,
-      outputTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
-      durationMs: Date.now() - start,
-    };
+      return {
+        text: response.text(),
+        inputTokens: response.usageMetadata?.promptTokenCount ?? 0,
+        outputTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
+        durationMs: Date.now() - start,
+      };
+    } catch (error) {
+      console.error("AI Generation Error:", error);
+      throw new Error("The Medical Navigator is temporarily unavailable. Please try again or seek direct assistance.");
+    }
   });
 }
-////
