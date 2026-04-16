@@ -2,22 +2,11 @@ import type { DoctorMatch, TimeSlot } from "../types/index.ts";
 import { useState } from "react";
 import { bookAppointment } from "../services/api.ts";
 import { useNavigatorStore } from "../hooks/useNavigatorStore.ts";
+import { Star, Hospital, Award, Globe, Clock, Banknote, ShieldAlert, CheckCircle2 } from "lucide-react";
 
 interface Props {
   match: DoctorMatch;
   isFirst: boolean;
-}
-
-function Stars({ rating }: { rating: number }) {
-  return (
-    <span className="stars">
-      {Array.from({ length: 5 }, (_, i) => (
-        <span key={i} style={{ color: i < Math.round(rating) ? "#d97706" : "#d1d5db" }}>
-          ★
-        </span>
-      ))}
-    </span>
-  );
 }
 
 export function DoctorCard({ match, isFirst }: Props) {
@@ -64,7 +53,7 @@ export function DoctorCard({ match, isFirst }: Props) {
         <div className="doctor-card__header-info">
           <div className="doctor-card__name">{doctor.name}</div>
           <div className="doctor-card__specialty">
-            {doctor.specialty} · {doctor.subspecialty}
+            {doctor.specialty} • {doctor.subspecialty}
           </div>
         </div>
         <div className="doctor-card__confidence">
@@ -73,81 +62,74 @@ export function DoctorCard({ match, isFirst }: Props) {
         </div>
       </div>
 
-      <div className="doctor-card__bar-row">
-        <div className="confidence-bar">
-          <div
-            className="confidence-bar__fill"
-            style={{ width: `${confidencePct}%` }}
-          />
-        </div>
-      </div>
-
-      <div className="doctor-card__grid">
-        <div className="doc-stat">
-          <span className="doc-stat__label">Next available</span>
-          <span className="doc-stat__value doc-stat__value--avail">
-            {doctor.availableSlots[0]?.label ?? "Call to book"}
-          </span>
-        </div>
-        <div className="doc-stat">
-          <span className="doc-stat__label">Rating</span>
-          <span className="doc-stat__value">
-            <Stars rating={doctor.rating} /> {doctor.rating} ({doctor.reviewCount})
-          </span>
-        </div>
-        <div className="doc-stat">
-          <span className="doc-stat__label">Languages</span>
-          <span className="doc-stat__value">{doctor.languages.join(", ")}</span>
-        </div>
-        <div className="doc-stat">
-          <span className="doc-stat__label">Experience</span>
-          <span className="doc-stat__value">{doctor.yearsExperience} yrs</span>
-        </div>
-        <div className="doc-stat">
-          <span className="doc-stat__label">Hospital</span>
-          <span className="doc-stat__value">{doctor.hospital}</span>
-        </div>
-        <div className="doc-stat">
-          <span className="doc-stat__label">Fees</span>
-          <span className="doc-stat__value">
-            {doctor.consultationFee === 0 ? "Emergency — no fee" : `₹${doctor.consultationFee}`}
-          </span>
-        </div>
-      </div>
-
-      {matchReasons.length > 0 && (
-        <div className="doctor-card__reasons">
-          {matchReasons.map((r) => (
-            <span key={r} className="reason-tag">{r}</span>
-          ))}
-        </div>
-      )}
-
       {!booking ? (
         <>
           {!showBooking ? (
-            <div className="doctor-card__actions">
-              <button
-                className="btn btn--primary"
-                onClick={() => setShowBooking(true)}
-              >
-                Book appointment
-              </button>
-              {doctor.emergencySpecialist && (
-                <button className="btn btn--danger">Escalate to ER</button>
-              )}
-              {!doctor.emergencySpecialist && (
-                <button className="btn btn--ghost">View profile</button>
-              )}
-            </div>
-          ) : (
-            <div className="booking-form">
-              <div className="booking-form__title">Confirm booking</div>
+            <>
+              <div className="doctor-card__grid">
+                <div className="doc-stat">
+                  <span className="doc-stat__label"><Clock size={12}/> Available</span>
+                  <span className="doc-stat__value doc-stat__value--avail">
+                    {doctor.availableSlots[0]?.label ?? "Call to book"}
+                  </span>
+                </div>
+                <div className="doc-stat">
+                  <span className="doc-stat__label"><Star size={12}/> Rating</span>
+                  <span className="doc-stat__value">
+                    {doctor.rating} ({doctor.reviewCount})
+                  </span>
+                </div>
+                <div className="doc-stat">
+                  <span className="doc-stat__label"><Award size={12}/> Experience</span>
+                  <span className="doc-stat__value">{doctor.yearsExperience} yrs</span>
+                </div>
+                <div className="doc-stat">
+                  <span className="doc-stat__label"><Hospital size={12}/> Hospital</span>
+                  <span className="doc-stat__value">{doctor.hospital}</span>
+                </div>
+                <div className="doc-stat">
+                  <span className="doc-stat__label"><Globe size={12}/> Languages</span>
+                  <span className="doc-stat__value">{doctor.languages.join(", ")}</span>
+                </div>
+                <div className="doc-stat">
+                  <span className="doc-stat__label"><Banknote size={12}/> Fees</span>
+                  <span className="doc-stat__value">
+                    {doctor.consultationFee === 0 ? "No fee" : `₹${doctor.consultationFee}`}
+                  </span>
+                </div>
+              </div>
 
-              <div className="form-group">
-                <label className="form-label">Select slot</label>
+              {matchReasons.length > 0 && (
+                <div className="doctor-card__reasons">
+                  {matchReasons.map((r) => (
+                    <span key={r} className="reason-tag">{r}</span>
+                  ))}
+                </div>
+              )}
+
+              <div className="doctor-card__actions">
+                <button
+                  className="btn btn--primary"
+                  onClick={() => setShowBooking(true)}
+                >
+                  Book appointment
+                </button>
+                {doctor.emergencySpecialist && (
+                  <button className="btn btn--danger">
+                    <ShieldAlert size={16} style={{marginRight: '4px'}}/> Escalate to ER
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="booking-form" style={{marginTop: '15px', padding: '10px', background: '#f8fafc', borderRadius: '8px'}}>
+              <div className="booking-form__title" style={{fontWeight: 700, marginBottom: '10px'}}>Confirm Appointment</div>
+
+              <div className="form-group" style={{marginBottom: '10px'}}>
+                <label className="doc-stat__label">Select slot</label>
                 <select
                   className="form-select"
+                  style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}
                   value={selectedSlot}
                   onChange={(e) => setSelectedSlot(Number(e.target.value))}
                 >
@@ -157,29 +139,29 @@ export function DoctorCard({ match, isFirst }: Props) {
                 </select>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Your name</label>
+              <div className="form-group" style={{marginBottom: '10px'}}>
                 <input
                   className="form-input"
+                  style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}
                   type="text"
-                  placeholder="Full name"
+                  placeholder="Your Full Name"
                   value={patientName}
                   onChange={(e) => setPatientName(e.target.value)}
                 />
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Phone number</label>
+              <div className="form-group" style={{marginBottom: '10px'}}>
                 <input
                   className="form-input"
+                  style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}
                   type="tel"
-                  placeholder="+91 XXXXX XXXXX"
+                  placeholder="Phone Number"
                   value={patientPhone}
                   onChange={(e) => setPatientPhone(e.target.value)}
                 />
               </div>
 
-              {bookingError && <div className="booking-error">{bookingError}</div>}
+              {bookingError && <div style={{color: '#dc2626', fontSize: '12px', marginBottom: '10px'}}>{bookingError}</div>}
 
               <div className="doctor-card__actions">
                 <button
@@ -187,7 +169,7 @@ export function DoctorCard({ match, isFirst }: Props) {
                   onClick={handleBook}
                   disabled={bookingLoading}
                 >
-                  {bookingLoading ? "Booking…" : "Confirm"}
+                  {bookingLoading ? "Booking..." : "Confirm"}
                 </button>
                 <button
                   className="btn btn--ghost"
@@ -200,14 +182,11 @@ export function DoctorCard({ match, isFirst }: Props) {
           )}
         </>
       ) : (
-        <div className="booking-confirm">
-          <div className="booking-confirm__icon">✓</div>
-          <div className="booking-confirm__title">Appointment confirmed</div>
-          <div className="booking-confirm__slot">{booking.slot.label}</div>
-          <div className="booking-confirm__id">Ref: {booking.bookingId.slice(0, 8).toUpperCase()}</div>
-          <div className="booking-confirm__note">
-            Bring your insurance card and a photo ID. Arrive 15 min early.
-          </div>
+        <div className="booking-confirm" style={{textAlign: 'center', padding: '20px'}}>
+          <CheckCircle2 size={40} color="#059669" style={{marginBottom: '10px'}}/>
+          <div style={{fontWeight: 700, color: '#059669'}}>Appointment Confirmed</div>
+          <div style={{fontSize: '14px', margin: '5px 0'}}>{booking.slot.label}</div>
+          <div style={{fontSize: '11px', color: '#64748b'}}>Ref: {booking.bookingId.slice(0, 8).toUpperCase()}</div>
         </div>
       )}
     </div>
