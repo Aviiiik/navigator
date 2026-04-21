@@ -2,6 +2,7 @@ import { type FastifyInstance } from "fastify";
 import { sessionStore } from "../db/sessions.js";
 import { aiLimiter } from "../services/ai.js";
 import { DOCTORS } from "../db/doctors.js";
+import { config } from "../config/index.js";
 
 const startTime = Date.now();
 
@@ -23,8 +24,14 @@ export async function healthRoutes(app: FastifyInstance) {
       .send({ status: healthy ? "ready" : "degraded", checks });
   });
 
-  // GET /health/metrics — internal metrics (should be protected in prod)
-  app.get("/metrics", async (_request, reply) => {
+  // GET /health/metrics — internal metrics (protected by METRICS_API_KEY when set)
+  app.get("/metrics", async (request, reply) => {
+    if (config.METRICS_API_KEY) {
+      const provided = request.headers["x-metrics-key"];
+      if (provided !== config.METRICS_API_KEY) {
+        return reply.status(401).send({ error: { code: "UNAUTHORIZED", message: "Invalid metrics key" } });
+      }
+    }
     const mem = process.memoryUsage();
     return reply.send({
       uptime: Math.floor((Date.now() - startTime) / 1000),

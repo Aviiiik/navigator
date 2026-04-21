@@ -24,11 +24,15 @@ interface NavigatorState {
   reset: () => void;
 }
 
+/**
+ * Generates a unique ID for frontend-side message tracking
+ */
 function makeId() {
   return crypto.randomUUID();
 }
 
 export const useNavigatorStore = create<NavigatorState>((set, get) => ({
+  // Initial State
   sessionId: null,
   preferences: { language: "English", insurance: "Self-pay" },
   sessionLoading: false,
@@ -38,6 +42,9 @@ export const useNavigatorStore = create<NavigatorState>((set, get) => ({
   lastUrgency: "normal",
   error: null,
 
+  /**
+   * Initializes a new session if one does not exist.
+   */
   initSession: async () => {
     if (get().sessionId) return;
     set({ sessionLoading: true, error: null });
@@ -46,12 +53,15 @@ export const useNavigatorStore = create<NavigatorState>((set, get) => ({
       set({ sessionId: session.sessionId, sessionLoading: false });
     } catch (err) {
       set({
-        error: err instanceof Error ? err.message : "Failed to start session",
+        error: err instanceof Error ? err.message : "Failed to start clinical session",
         sessionLoading: false,
       });
     }
   },
 
+  /**
+   * Updates user preferences (language/insurance) and syncs with backend.
+   */
   setPreferences: async (prefs) => {
     const next = { ...get().preferences, ...prefs };
     set({ preferences: next });
@@ -60,12 +70,16 @@ export const useNavigatorStore = create<NavigatorState>((set, get) => ({
       try {
         await api.updatePreferences(sessionId, next);
       } catch {
-        // Preferences saved locally even if network fails
+        // Silently fail preference sync; local state is maintained
       }
     }
   },
 
-  sendMessage: async (text) => {
+  /**
+   * Standard Message: Sends a symptom and waits for the full AI response.
+   * Utilizes context-aware matching from the backend.
+   */
+  sendMessage: async (text: string) => {
     const { sessionId } = get();
     if (!sessionId) return;
 
@@ -76,6 +90,7 @@ export const useNavigatorStore = create<NavigatorState>((set, get) => ({
       timestamp: Date.now(),
     };
 
+    // Update UI immediately to show user input
     set((s) => ({
       messages: [...s.messages, userMsg],
       isThinking: true,
@@ -91,7 +106,7 @@ export const useNavigatorStore = create<NavigatorState>((set, get) => ({
         content: response.agentMessage,
         timestamp: Date.now(),
         urgency: response.urgency,
-        matches: response.matches,
+        matches: response.matches, // Matches are now anchored to primary condition
       };
 
       set((s) => ({
@@ -100,14 +115,18 @@ export const useNavigatorStore = create<NavigatorState>((set, get) => ({
         lastUrgency: response.urgency,
       }));
     } catch (err) {
+      // Ensure 'isThinking' is reset even on error to prevent UI hang
       set({
         isThinking: false,
-        error: err instanceof Error ? err.message : "Something went wrong",
+        error: err instanceof Error ? err.message : "The Medical Navigator is temporarily unavailable.",
       });
     }
   },
 
-  sendMessageStream: (text) => {
+  /**
+   * Streaming Message: Real-time token streaming for faster perceived response time.
+   */
+  sendMessageStream: (text: string) => {
     const { sessionId } = get();
     if (!sessionId) return;
 
@@ -132,15 +151,10 @@ export const useNavigatorStore = create<NavigatorState>((set, get) => ({
 
     es.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data) as {
-          type: string;
-          chunk?: string;
-          urgency?: Urgency;
-          matches?: ChatMessage["matches"];
-        };
+        const data = JSON.parse(event.data);
 
+        // First event usually contains matched doctors
         if (data.type === "matches") {
-          // Add assistant placeholder card immediately with matches
           const assistantMsg: ChatMessage = {
             id: assistantId,
             role: "assistant",
@@ -155,7 +169,9 @@ export const useNavigatorStore = create<NavigatorState>((set, get) => ({
             isThinking: false,
             lastUrgency: data.urgency ?? "normal",
           }));
-        } else if (data.type === "text" && data.chunk) {
+        } 
+        // Subsequent events contain text chunks
+        else if (data.type === "text" && data.chunk) {
           accumulated += data.chunk;
           set((s) => ({
             messages: s.messages.map((m) =>
@@ -164,30 +180,35 @@ export const useNavigatorStore = create<NavigatorState>((set, get) => ({
                 : m
             ),
           }));
-        } else if (data.type === "done") {
+        } 
+        else if (data.type === "done") {
           set((s) => ({
             messages: s.messages.map((m) =>
               m.id === assistantId ? { ...m, isStreaming: false } : m
             ),
           }));
           es.close();
-        } else if (data.type === "error") {
-          set({ error: "AI service error — please retry" });
+        } 
+        else if (data.type === "error") {
+          set({ isThinking: false, error: "AI service error — please retry" });
           es.close();
         }
       } catch {
-        // ignore parse errors
+        // Handle malformed JSON chunks gracefully
       }
     };
 
     es.onerror = () => {
-      set({ isThinking: false, error: "Connection error — please retry" });
+      set({ isThinking: false, error: "Connection to Navigator lost — please retry" });
       es.close();
     };
   },
 
   clearError: () => set({ error: null }),
 
+  /**
+   * Fully resets the session and conversation history.
+   */
   reset: () =>
     set({
       sessionId: null,
