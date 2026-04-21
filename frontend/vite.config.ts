@@ -14,6 +14,9 @@ export default defineConfig(({ mode }) => {
         "/health": { target: backendUrl, changeOrigin: true },
       },
     },
+    preview: {
+      allowedHosts: true,
+    },
     build: {
       outDir: "dist",
       sourcemap: true,
