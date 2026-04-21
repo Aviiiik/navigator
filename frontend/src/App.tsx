@@ -18,9 +18,10 @@ export default function App() {
     if (messages.length === 0) {
       useNavigatorStore.setState({
         messages: [{
+          id: crypto.randomUUID(),
           role: "assistant",
           content: "Hello! Welcome to the Medical Navigator. I am here to help you find the right specialist for your needs. Could you please describe the symptoms or health concerns you are currently experiencing?",
-          timestamp: new Date()
+          timestamp: Date.now()
         }]
       });
     }
