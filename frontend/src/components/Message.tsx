@@ -1,5 +1,5 @@
-import type { ChatMessage } from "../types/index.ts";
-import { DoctorCard } from "./DoctorCard.tsx";
+import type { ChatMessage } from "../types/index.js";
+import { DoctorCard } from "./DoctorCard";
 import { User, Stethoscope } from "lucide-react";
 
 interface Props {

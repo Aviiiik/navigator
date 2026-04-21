@@ -1,7 +1,7 @@
 // src/main.tsx
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import App from './App.tsx' // Ensure you have an App.tsx file as well
+import App from './App' // Ensure you have an App.tsx file as well
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
