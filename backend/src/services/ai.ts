@@ -4,7 +4,7 @@ import { type Doctor } from "../db/doctors.js";
 import { type Urgency } from "../services/matcher.js";
 import { type Message } from "../db/sessions.js";
 
-// Initialize Gemini
+// Initialize Gemini 3 Flash
 const genAI = new GoogleGenerativeAI(config.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ 
   model: "gemini-3-flash-preview" 
@@ -45,15 +45,23 @@ class ConcurrencyLimiter {
     }
   }
 
+  /**
+   * Returns current limiter state.
+   * Required by health and chat routes for monitoring.
+   */
   stats() {
-    return { running: this.running, queued: this.queue.length };
+    return { 
+      running: this.running, 
+      queued: this.queue.length,
+      max: this.max 
+    };
   }
 }
 
 export const aiLimiter = new ConcurrencyLimiter(config.MAX_CONCURRENT_AI_REQUESTS);
 
 /**
- * Builds the system instruction tailored for high-risk conditions and formal greetings.
+ * Builds the system instruction tailored for superspeciality care and anchoring.
  */
 function buildSystemPrompt(
   primaryDoctor: Doctor,
@@ -63,26 +71,26 @@ function buildSystemPrompt(
 ): string {
   return `You are a Senior Hospital Navigator — a clinical routing expert with deep empathy.
 
-CURRENT CONTEXT:
-- Recommended Specialist: ${primaryDoctor.name} (${primaryDoctor.specialty})
-- Language: ${language}
-- Insurance: ${insurance}
-- Urgency Level: ${urgency}
+CURRENT CLINICAL LEAD:
+- Primary Specialist: ${primaryDoctor.name}
+- Department: ${primaryDoctor.specialty}
+- Insurance Context: ${insurance}
+- Urgency: ${urgency}
 
-DIALOGUE PROTOCOLS:
-1. GREETING: If the user simply says "Hi", "Hello", or similar, respond with: "Hello! Welcome to the Medical Navigator. I am here to help you find the right specialist for your needs. Could you please describe the symptoms or health concerns you are currently experiencing?"
-2. COMPLEX CONDITIONS (Cancer/Lung Issues): If the user mentions symptoms like tumors, chronic cough, or breathing difficulty, prioritize professional empathy. Explain that ${primaryDoctor.specialty} is the specific field equipped to investigate these concerns.
-3. URGENCY HANDLING: For ${urgency} status "critical" or "high", be direct about the need for prompt evaluation. 
-4. DOCTOR HIGHLIGHT: Mention ${primaryDoctor.name} specifically and highlight why they match (e.g., expertise in ${primaryDoctor.keywords.slice(0, 2).join(", ")}).
-5. FOLLOW-UP: If the input is brief, ask one targeted question (e.g., "How long have you had this cough?") to better assess the case.
-
-TONE: Clinical, authoritative, warm, and concise. Max 5 sentences. Use ${language}.`;
+STRATEGIC INSTRUCTIONS:
+1. ANCHORING: The user's case is primarily a ${primaryDoctor.specialty} matter. If they mention new symptoms (like fever, pain, or nausea), acknowledge them, but explain that ${primaryDoctor.name} is the best specialist to coordinate their overall care plan.
+2. GREETING: If the user says "Hi" or "Hello", respond with: "Hello! Welcome to the Medical Navigator. I am here to help you find the right specialist for your needs. Could you please describe the symptoms or health concerns you are currently experiencing?"
+3. COMPLEX CONDITIONS: For high-priority conditions like Cancer or Heart issues, maintain a tone of professional empathy. Highlight that ${primaryDoctor.name} has specific expertise in ${primaryDoctor.keywords.slice(0, 3).join(", ")}.
+4. CRITICAL ESCALATION: If urgency is "critical", immediately advise the user to seek emergency intervention while noting that ${primaryDoctor.name} will be their lead consultant for follow-up care.
+5. CONCISION: Keep responses warm but clinical. Max 4 sentences. Use ${language}.`;
 }
 
 export interface AIResponse {
   text: string;
-  inputTokens: number;
-  outputTokens: number;
+  usage: {
+    promptTokens: number;
+    completionTokens: number;
+  };
   durationMs: number;
 }
 
@@ -120,13 +128,14 @@ export async function getNavigatorResponse(
 
       return {
         text: response.text(),
-        inputTokens: response.usageMetadata?.promptTokenCount ?? 0,
-        outputTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
+        usage: {
+          promptTokens: response.usageMetadata?.promptTokenCount ?? 0,
+          completionTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
+        },
         durationMs: Date.now() - start,
       };
     } catch (error) {
-      console.error("AI Generation Error:", error);
-      throw new Error("The Medical Navigator is temporarily unavailable. Please try again or seek direct assistance.");
+      throw new Error("The Medical Navigator is temporarily unavailable. Please seek direct assistance.");
     }
   });
 }

@@ -12,6 +12,7 @@ const envSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60_000),
   MAX_CONCURRENT_AI_REQUESTS: z.coerce.number().default(50),
   AI_REQUEST_TIMEOUT_MS: z.coerce.number().default(30_000),
+  METRICS_API_KEY: z.string().optional(),
 });
 
 function loadConfig() {

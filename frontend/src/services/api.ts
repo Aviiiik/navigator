@@ -9,46 +9,57 @@ import type {
 
 // --- Configuration ---
 const api = axios.create({
-  baseURL: "/api",
+  baseURL: import.meta.env.VITE_API_BASE_URL ?? "/api",
   timeout: 35_000,
   headers: { "Content-Type": "application/json" },
 });
 
 // --- Interceptors ---
 
-// Request interceptor: Attaches a unique Correlation ID to every request for tracing
+/**
+ * Request interceptor: Attaches a unique Correlation ID to every request.
+ * Useful for tracing logs from the frontend through to the backend.
+ */
 api.interceptors.request.use((config) => {
   config.headers["X-Correlation-ID"] = crypto.randomUUID();
   return config;
 });
 
-// Response interceptor: Unwraps error messages from the backend's standard error format
+/**
+ * Response interceptor: Unwraps error messages.
+ * This ensures that if the backend throws a ValidationError or AIServiceError,
+ * the frontend gets the specific message (e.g., "Too many requests") 
+ * instead of a generic "Request failed with status code 503".
+ */
 api.interceptors.response.use(
   (res) => res,
   (error: AxiosError<{ error: { code: string; message: string } }>) => {
     const msg =
       error.response?.data?.error?.message ??
       error.message ??
-      "Network error";
+      "Network error - The Medical Navigator is currently unavailable.";
     return Promise.reject(new Error(msg));
   }
 );
 
 // --- 1. Session Management ---
 
-/** Creates a new hospital navigator session with user preferences */
+/** * Creates a new hospital navigator session with user preferences.
+ */
 export async function createSession(prefs: Partial<Preferences>): Promise<Session> {
   const res = await api.post<Session>("/sessions", prefs);
   return res.data;
 }
 
-/** Retrieves an existing session by ID */
+/** * Retrieves an existing session by ID to restore state.
+ */
 export async function getSession(sessionId: string): Promise<Session> {
   const res = await api.get<Session>(`/sessions/${sessionId}`);
   return res.data;
 }
 
-/** Updates patient preferences (language, insurance, etc.) for an active session */
+/** * Updates patient preferences mid-session.
+ */
 export async function updatePreferences(
   sessionId: string,
   prefs: Partial<Preferences>
@@ -62,7 +73,9 @@ export async function updatePreferences(
 
 // --- 2. Chat Interaction ---
 
-/** Sends a message to the AI Navigator and returns the processed response */
+/** * Sends a message to the AI Navigator.
+ * The backend now utilizes cumulative history to maintain anchoring.
+ */
 export async function sendMessage(
   sessionId: string,
   message: string
@@ -71,8 +84,8 @@ export async function sendMessage(
   return res.data;
 }
 
-/** * Returns an EventSource for real-time token streaming from the AI.
- * Note: EventSource does not support custom headers natively.
+/** * Returns an EventSource for real-time token streaming.
+ * Note: Browser EventSource API does not support custom headers natively.
  */
 export function createChatStream(sessionId: string, message: string): EventSource {
   const params = new URLSearchParams({ sessionId, message });
@@ -88,7 +101,8 @@ export interface DoctorListResponse {
   doctors: Doctor[];
 }
 
-/** Lists doctors based on filters like specialty, insurance, or availability */
+/** * Lists doctors based on various filters.
+ */
 export async function listDoctors(filters?: {
   specialty?: string;
   language?: string;
@@ -102,13 +116,16 @@ export async function listDoctors(filters?: {
   return res.data;
 }
 
-/** Retrieves full details for a specific doctor */
+/** * Retrieves full details for a specific doctor.
+ */
 export async function getDoctor(id: string): Promise<{ doctor: Doctor }> {
   const res = await api.get<{ doctor: Doctor }>(`/doctors/${id}`);
   return res.data;
 }
 
-/** Books an appointment slot for a patient within the current session */
+/** * Books an appointment slot.
+ * Now references the sessionId to pull patient insurance and context.
+ */
 export async function bookAppointment(payload: {
   sessionId: string;
   doctorId: string;

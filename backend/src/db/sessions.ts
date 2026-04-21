@@ -68,7 +68,7 @@ class SessionStore {
     if (!session) return false;
     // Trim history to prevent context window blowout
     if (session.messages.length >= MAX_MESSAGES_PER_SESSION) {
-      session.messages.splice(0, 2); // remove oldest user+assistant pair
+      session.messages.splice(0, Math.min(2, session.messages.length));
     }
     session.messages.push(message);
     session.lastActivity = Date.now();

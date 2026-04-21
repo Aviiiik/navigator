@@ -1,154 +1,145 @@
 import { DOCTORS, type Doctor, type Urgency } from "../db/doctors.js";
+import { HOSPITAL_TAXONOMY, getAnchorDepartment } from "../db/taxonomy.js";
+import { type Message } from "../db/sessions.js";
 
 export interface MatchCriteria {
   symptoms: string;
   language?: string;
   insurance?: string;
-  genderPreference?: string;
   urgency: Urgency;
 }
 
 export interface DoctorMatch {
   doctor: Doctor;
-  score: number;          // 0–100
+  score: number;
+  confidencePct: number;
   matchReasons: string[];
-  confidencePct: number;  // display-safe 0–100
 }
 
-// Critical: Life-threatening symptoms requiring immediate ER intervention
-const URGENCY_CRITICAL_TERMS = new Set([
-  "severe", "worst", "crushing", "cant breathe", "can't breathe",
-  "unconscious", "unresponsive", "emergency", "dying", "collapse", "faint",
-  "radiating", "sudden onset", "heart attack", "choking", "blue lips", 
-  "coughing blood", "gasping"
-]);
-
-// High: Serious conditions like potential oncology or chronic respiratory issues
-const URGENCY_HIGH_TERMS = new Set([
-  "sudden", "worse", "sharp", "unbearable", "fever", "vomiting", 
-  "bleeding", "getting worse", "shortness of breath", "chest pain", 
-  "lump", "tumor", "weight loss", "persistent cough", "smoker", "biopsy",
-  "mass", "night sweats", "wheezing", "labored breathing"
-]);
-
 /**
- * Detects urgency level based on keyword analysis of user input.
+ * Detects urgency level based on keyword analysis.
+ * Priority: Critical > High > Normal.
  */
 export function detectUrgency(text: string): Urgency {
   const lower = text.toLowerCase();
   
-  // Check for critical respiratory or cardiac distress first
-  for (const term of URGENCY_CRITICAL_TERMS) {
-    if (lower.includes(term)) return "critical";
-  }
+  const criticalTerms = ["can't breathe", "unconscious", "crushing chest pain", "heavy bleeding", "stroke"];
+  if (criticalTerms.some(term => lower.includes(term))) return "critical";
   
-  // Check for high-risk flags (Oncology/Pulmonology indicators)
-  for (const term of URGENCY_HIGH_TERMS) {
-    if (lower.includes(term)) return "high";
-  }
+  const highTerms = ["cancer", "tumor", "persistent cough", "lump", "severe pain", "fever"];
+  if (highTerms.some(term => lower.includes(term))) return "high";
   
   return "normal";
 }
 
 /**
- * Scores a doctor against patient criteria with heavy weighting for 
- * specialized disease categories.
+ * Calculates a clinical score for a doctor based on weighted taxonomy and keywords.
  */
-export function scoreDoctor(doctor: Doctor, criteria: MatchCriteria): DoctorMatch {
+export function scoreDoctor(doctor: Doctor, criteria: MatchCriteria): number {
   let score = 0;
+  const text = criteria.symptoms.toLowerCase();
+
+  // 1. ANCHOR MATCHING: Identify the highest priority department for these symptoms
+  const anchorDept = getAnchorDepartment(text);
+  
+  if (anchorDept && doctor.specialty === anchorDept.specialty) {
+    // Boost the doctor if they belong to the highest-priority detected department
+    score += anchorDept.priority;
+  }
+
+  // 2. KEYWORD HITS: Direct symptom-to-doctor keyword matching
+  const keywordHits = doctor.keywords.filter(k => text.includes(k.toLowerCase())).length;
+  score += (keywordHits * 10);
+
+  // 3. EMERGENCY OVERRIDE: If urgency is critical, prioritize Emergency Specialists
+  if (criteria.urgency === "critical" && doctor.emergencySpecialist) {
+    score += 200;
+  }
+
+  // 4. SECONDARY PREFERENCES: Language and Insurance
+  if (criteria.language && doctor.languages.includes(criteria.language)) {
+    score += 15;
+  }
+  if (criteria.insurance && (doctor.insuranceAccepted.includes(criteria.insurance) || doctor.insuranceAccepted.includes("All insurance accepted"))) {
+    score += 15;
+  }
+
+  // 5. AVAILABILITY: Small boost for immediate care
+  if (doctor.nextAvailable === "immediate") score += 20;
+  if (doctor.nextAvailable === "today") score += 10;
+
+  return score;
+}
+
+function getMatchReasons(doctor: Doctor, criteria: MatchCriteria): string[] {
   const reasons: string[] = [];
   const text = criteria.symptoms.toLowerCase();
 
-  // --- Specialized Disease Detection ---
-  const isOncologyCase = /lump|tumor|cancer|mass|biopsy|oncology/i.test(text);
-  const isPulmonaryCase = /lung|breathing|cough|breath|pulmonary|wheezing/i.test(text);
-
-  // Boost specialists for detected complex conditions
-  if (isOncologyCase && doctor.specialty === "Oncology") {
-    score += 45;
-    reasons.push("Oncology specialist for detected mass/tumor flags");
-  }
-  if (isPulmonaryCase && doctor.specialty === "Pulmonology") {
-    score += 45;
-    reasons.push("Pulmonology specialist for respiratory symptoms");
+  const anchorDept = getAnchorDepartment(text);
+  if (anchorDept && doctor.specialty === anchorDept.specialty) {
+    reasons.push(`${doctor.specialty} specialist`);
   }
 
-  // --- Keyword match (max 40 pts) ---
-  let keywordHits = 0;
-  for (const keyword of doctor.keywords) {
-    if (text.includes(keyword.toLowerCase())) keywordHits++;
-  }
-  if (keywordHits > 0) {
-    const keywordScore = Math.min(keywordHits * 10, 40);
-    score += keywordScore;
-    reasons.push(`Matches ${keywordHits} symptom-specific keyword${keywordHits > 1 ? "s" : ""}`);
+  if (doctor.keywords.some(k => text.includes(k.toLowerCase()))) {
+    reasons.push("Matches your symptoms");
   }
 
-  // --- Emergency escalation (critical urgency) ---
   if (criteria.urgency === "critical" && doctor.emergencySpecialist) {
-    score += 60;
-    reasons.push("Emergency specialist — recommended for critical distress");
+    reasons.push("Emergency specialist");
   }
 
-  // --- Secondary Criteria (Language/Insurance) ---
   if (criteria.language && doctor.languages.includes(criteria.language)) {
-    score += 10;
     reasons.push(`Speaks ${criteria.language}`);
   }
 
-  if (criteria.insurance) {
-    const insMatch =
-      doctor.insuranceAccepted.includes(criteria.insurance) ||
-      doctor.insuranceAccepted.includes("All insurance accepted");
-    if (insMatch) {
-      score += 10;
-      reasons.push(`Accepts ${criteria.insurance}`);
-    }
+  if (criteria.insurance && (doctor.insuranceAccepted.includes(criteria.insurance) || doctor.insuranceAccepted.includes("All insurance accepted"))) {
+    reasons.push(`Accepts ${criteria.insurance}`);
   }
 
-  // --- Availability bonus ---
-  if (doctor.nextAvailable === "immediate") {
-    score += 15;
-    reasons.push("Immediate availability");
-  } else if (doctor.nextAvailable === "today") {
-    score += 5;
-    reasons.push("Available today");
-  }
+  if (doctor.nextAvailable === "immediate") reasons.push("Available now");
+  else if (doctor.nextAvailable === "today") reasons.push("Available today");
 
-  // --- Final Normalization ---
-  // Clamp score between 0-100 and ensure display percentage looks realistic
-  const finalScore = Math.max(0, Math.min(score, 100));
-  const confidencePct = Math.max(15, Math.min(99, finalScore));
-
-  return { doctor, score: finalScore, matchReasons: reasons, confidencePct };
+  return reasons;
 }
 
 /**
- * Matches doctors based on criteria, prioritizing emergency specialists 
- * during critical urgency.
+ * Main matching engine.
+ * It aggregates full session history to prevent losing context of serious conditions.
  */
-export function matchDoctors(criteria: MatchCriteria, limit = 3): DoctorMatch[] {
-  const urgency = criteria.urgency;
+export function matchDoctors(
+  currentInput: string,
+  history: Message[],
+  preferences: { language: string; insurance: string }
+): DoctorMatch[] {
+  const fullSymptomContext = history
+    .filter(m => m.role === "user")
+    .map(m => m.content)
+    .concat(currentInput)
+    .join(" ");
+
+  const urgency = detectUrgency(fullSymptomContext);
+
+  const criteria: MatchCriteria = {
+    symptoms: fullSymptomContext,
+    language: preferences.language,
+    insurance: preferences.insurance,
+    urgency
+  };
 
   const scored = DOCTORS
-    .map((d) => scoreDoctor(d, criteria))
-    .filter((m) => m.score > 0)
-    .sort((a, b) => {
-      // Force Emergency Medicine to the top for critical cases
-      if (urgency === "critical") {
-        if (a.doctor.emergencySpecialist && !b.doctor.emergencySpecialist) return -1;
-        if (!a.doctor.emergencySpecialist && b.doctor.emergencySpecialist) return 1;
-      }
-      return b.score - a.score;
-    });
+    .map(doctor => ({ doctor, score: scoreDoctor(doctor, criteria) }))
+    .filter(m => m.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
 
-  // Fallback: If no matches found, return the most relevant default
-  if (scored.length === 0) {
-    const fallback = urgency === "critical"
-      ? DOCTORS.find((d) => d.emergencySpecialist)!
-      : DOCTORS[0];
-    return [scoreDoctor(fallback, criteria)];
-  }
+  const maxScore = scored[0]?.score ?? 1;
 
-  return scored.slice(0, limit);
+  return scored.map(({ doctor, score }) => ({
+    doctor,
+    score,
+    confidencePct: Math.min(99, Math.round((score / maxScore) * 90) + 9),
+    matchReasons: getMatchReasons(doctor, criteria),
+  }));
 }
+
+export { Urgency };

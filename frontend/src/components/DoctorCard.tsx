@@ -1,8 +1,17 @@
-import type { DoctorMatch, TimeSlot } from "../types/index.ts";
+import type { DoctorMatch, TimeSlot } from "../types/index.js";
 import { useState } from "react";
-import { bookAppointment } from "../services/api.ts";
-import { useNavigatorStore } from "../hooks/useNavigatorStore.ts";
-import { Star, Hospital, Award, Globe, Clock, Banknote, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { bookAppointment } from "../services/api.js";
+import { useNavigatorStore } from "../hooks/useNavigatorStore.js";
+import { 
+  Star, 
+  Hospital, 
+  Award, 
+  Globe, 
+  Clock, 
+  Banknote, 
+  ShieldAlert, 
+  CheckCircle2 
+} from "lucide-react";
 
 interface Props {
   match: DoctorMatch;
@@ -10,9 +19,16 @@ interface Props {
 }
 
 export function DoctorCard({ match, isFirst }: Props) {
-  const { doctor, confidencePct, matchReasons } = match;
+  // Defensive Destructuring: Fallback values prevent crashes if backend data is partial
+  const { 
+    doctor, 
+    confidencePct = 95, 
+    matchReasons = [] 
+  } = match;
+
   const { sessionId } = useNavigatorStore();
 
+  // Booking State
   const [showBooking, setShowBooking] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<number>(0);
   const [patientName, setPatientName] = useState("");
@@ -21,13 +37,18 @@ export function DoctorCard({ match, isFirst }: Props) {
   const [bookingError, setBookingError] = useState("");
   const [bookingLoading, setBookingLoading] = useState(false);
 
+  // Early return if doctor data is missing to prevent component crash
+  if (!doctor) return null;
+
   const handleBook = async () => {
     if (!sessionId || !patientName.trim() || !patientPhone.trim()) {
       setBookingError("Please fill in all fields");
       return;
     }
+    
     setBookingLoading(true);
     setBookingError("");
+    
     try {
       const res = await bookAppointment({
         sessionId,
@@ -49,11 +70,11 @@ export function DoctorCard({ match, isFirst }: Props) {
       {isFirst && <div className="doctor-card__badge">Best match</div>}
 
       <div className="doctor-card__header">
-        <div className="doctor-card__avatar">{doctor.initials}</div>
+        <div className="doctor-card__avatar">{doctor.initials || "??"}</div>
         <div className="doctor-card__header-info">
           <div className="doctor-card__name">{doctor.name}</div>
           <div className="doctor-card__specialty">
-            {doctor.specialty} • {doctor.subspecialty}
+            {doctor.specialty} {doctor.subspecialty ? `• ${doctor.subspecialty}` : ""}
           </div>
         </div>
         <div className="doctor-card__confidence">
@@ -70,39 +91,47 @@ export function DoctorCard({ match, isFirst }: Props) {
                 <div className="doc-stat">
                   <span className="doc-stat__label"><Clock size={12}/> Available</span>
                   <span className="doc-stat__value doc-stat__value--avail">
-                    {doctor.availableSlots[0]?.label ?? "Call to book"}
+                    {doctor.availableSlots?.[0]?.label ?? "Call to book"}
                   </span>
                 </div>
+                
                 <div className="doc-stat">
                   <span className="doc-stat__label"><Star size={12}/> Rating</span>
                   <span className="doc-stat__value">
-                    {doctor.rating} ({doctor.reviewCount})
+                    {doctor.rating ?? "N/A"} ({doctor.reviewCount ?? 0})
                   </span>
                 </div>
+
                 <div className="doc-stat">
                   <span className="doc-stat__label"><Award size={12}/> Experience</span>
-                  <span className="doc-stat__value">{doctor.yearsExperience} yrs</span>
+                  <span className="doc-stat__value">{doctor.yearsExperience ?? 0} yrs</span>
                 </div>
+
                 <div className="doc-stat">
                   <span className="doc-stat__label"><Hospital size={12}/> Hospital</span>
-                  <span className="doc-stat__value">{doctor.hospital}</span>
+                  <span className="doc-stat__value">{doctor.hospital || "Main Campus"}</span>
                 </div>
+
                 <div className="doc-stat">
                   <span className="doc-stat__label"><Globe size={12}/> Languages</span>
-                  <span className="doc-stat__value">{doctor.languages.join(", ")}</span>
+                  <span className="doc-stat__value">
+                    {doctor.languages?.length > 0 ? doctor.languages.join(", ") : "English"}
+                  </span>
                 </div>
+
                 <div className="doc-stat">
                   <span className="doc-stat__label"><Banknote size={12}/> Fees</span>
                   <span className="doc-stat__value">
-                    {doctor.consultationFee === 0 ? "No fee" : `₹${doctor.consultationFee}`}
+                    {doctor.consultationFee === 0 ? "No fee" : `₹${doctor.consultationFee || "TBD"}`}
                   </span>
                 </div>
               </div>
 
-              {matchReasons.length > 0 && (
+              {/* matchReasons.map only runs if data is an array */}
+              {Array.isArray(matchReasons) && matchReasons.length > 0 && (
                 <div className="doctor-card__reasons">
-                  {matchReasons.map((r) => (
-                    <span key={r} className="reason-tag">{r}</span>
+                  {matchReasons.map((reason) => (
+                    <span key={reason} className="reason-tag">{reason}</span>
                   ))}
                 </div>
               )}
@@ -122,6 +151,7 @@ export function DoctorCard({ match, isFirst }: Props) {
               </div>
             </>
           ) : (
+            /* Booking Form UI */
             <div className="booking-form" style={{marginTop: '15px', padding: '10px', background: '#f8fafc', borderRadius: '8px'}}>
               <div className="booking-form__title" style={{fontWeight: 700, marginBottom: '10px'}}>Confirm Appointment</div>
 
@@ -133,7 +163,7 @@ export function DoctorCard({ match, isFirst }: Props) {
                   value={selectedSlot}
                   onChange={(e) => setSelectedSlot(Number(e.target.value))}
                 >
-                  {doctor.availableSlots.map((slot, i) => (
+                  {doctor.availableSlots?.map((slot, i) => (
                     <option key={i} value={i}>{slot.label}</option>
                   ))}
                 </select>
@@ -161,7 +191,11 @@ export function DoctorCard({ match, isFirst }: Props) {
                 />
               </div>
 
-              {bookingError && <div style={{color: '#dc2626', fontSize: '12px', marginBottom: '10px'}}>{bookingError}</div>}
+              {bookingError && (
+                <div style={{color: '#dc2626', fontSize: '12px', marginBottom: '10px'}}>
+                  {bookingError}
+                </div>
+              )}
 
               <div className="doctor-card__actions">
                 <button
@@ -182,11 +216,14 @@ export function DoctorCard({ match, isFirst }: Props) {
           )}
         </>
       ) : (
+        /* Success State */
         <div className="booking-confirm" style={{textAlign: 'center', padding: '20px'}}>
           <CheckCircle2 size={40} color="#059669" style={{marginBottom: '10px'}}/>
           <div style={{fontWeight: 700, color: '#059669'}}>Appointment Confirmed</div>
-          <div style={{fontSize: '14px', margin: '5px 0'}}>{booking.slot.label}</div>
-          <div style={{fontSize: '11px', color: '#64748b'}}>Ref: {booking.bookingId.slice(0, 8).toUpperCase()}</div>
+          <div style={{fontSize: '14px', margin: '5px 0'}}>{booking.slot?.label}</div>
+          <div style={{fontSize: '11px', color: '#64748b'}}>
+            Ref: {booking.bookingId?.slice(0, 8).toUpperCase()}
+          </div>
         </div>
       )}
     </div>
