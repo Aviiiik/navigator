@@ -15,7 +15,7 @@ const envSchema = z.object({
   METRICS_API_KEY: z.string().optional(),
 });
 
-function loadConfig() {
+function loadConfig(): z.infer<typeof envSchema> {
   const result = envSchema.safeParse(process.env);
   if (!result.success) {
     console.error("❌ Invalid environment variables:");
