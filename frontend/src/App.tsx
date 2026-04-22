@@ -52,6 +52,8 @@ export default function App() {
           --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
         }
 
+        *, *::before, *::after { box-sizing: border-box; }
+
         .medical-nav-wrapper {
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
@@ -171,6 +173,54 @@ export default function App() {
         .send-btn:disabled { opacity: 0.4; }
 
         .thinking { font-size: 0.8rem; color: #94a3b8; margin-bottom: 10px; font-style: italic; }
+
+        /* ── Responsive ── */
+
+        /* Small tablet / large phone landscape (481–680px) */
+        @media (max-width: 680px) and (min-width: 481px) {
+          .chat-widget {
+            width: calc(100vw - 32px);
+            right: 16px;
+            bottom: 16px;
+          }
+          .fab-trigger {
+            right: 16px;
+            bottom: 16px;
+          }
+        }
+
+        /* Mobile phones (≤ 480px) — full-screen bottom sheet */
+        @media (max-width: 480px) {
+          .chat-widget {
+            width: 100%;
+            height: 100vh;
+            height: 100dvh;
+            max-height: 100%;
+            bottom: 0;
+            right: 0;
+            border-radius: 0;
+          }
+          .fab-trigger {
+            bottom: 16px;
+            right: 16px;
+            padding: 10px 16px;
+            gap: 8px;
+            font-size: 0.9rem;
+          }
+          .chat-window {
+            padding: 12px;
+          }
+          .chat-input-area {
+            padding: 12px;
+            padding-bottom: max(12px, env(safe-area-inset-bottom));
+          }
+          .message-row {
+            max-width: 98%;
+          }
+          .chat-bubble {
+            font-size: 0.9rem;
+          }
+        }
       `}</style>
 
       <div className="medical-nav-wrapper">
